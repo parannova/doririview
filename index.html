@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>현장 종합 지도 - A~E 위치 고정형</title>
+<style>
+:root { --bg:#0b1118; --panel:rgba(9,14,22,.88); --line:rgba(255,255,255,.18); --text:#eef5ff; --muted:#9fb0c3; }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI','Malgun Gothic',sans-serif;}
+.app{display:grid;grid-template-columns:minmax(680px,1fr) 390px;min-height:100vh;}
+.stage-wrap{position:relative;padding:18px;overflow:auto;background:radial-gradient(circle at 20% 0%,#1d2b3b 0,#0b1118 42%);}
+.stage{position:relative;width:min(980px,calc(100vw - 440px));min-width:680px;margin:auto;border-radius:22px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.55);border:1px solid var(--line);}
+.base-map{display:block;width:100%;height:auto;user-select:none;}
+.header{position:absolute;left:18px;top:18px;background:rgba(0,0,0,.54);padding:14px 16px;border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(8px);}
+.header h1{margin:0 0 5px;font-size:24px} .header p{margin:0;color:#d8e4ef;font-size:13px}
+.compass{position:absolute;right:18px;top:18px;width:86px;height:86px;border-radius:50%;border:2px solid rgba(255,255,255,.82);background:rgba(0,0,0,.56);display:flex;align-items:center;justify-content:center;flex-direction:column;font-weight:800;box-shadow:0 8px 22px rgba(0,0,0,.35)}
+.compass b{font-size:28px;line-height:24px} .compass span{font-size:13px}
+.south{position:absolute;right:18px;bottom:18px;background:rgba(0,0,0,.56);border:1px solid var(--line);border-radius:18px;padding:8px 12px;font-weight:800}
+.marker{position:absolute;left:var(--x);top:var(--y);transform:translate(-50%,-50%);width:46px;height:46px;border-radius:50%;display:grid;place-items:center;color:white;font-weight:900;font-size:22px;background:var(--c);border:4px solid white;box-shadow:0 8px 22px rgba(0,0,0,.55);cursor:grab;z-index:5;}
+.marker:active{cursor:grabbing} .marker.selected{outline:4px solid rgba(255,255,255,.46)}
+.ray{position:absolute;left:var(--x);top:var(--y);width:2px;height:var(--len);background:linear-gradient(to bottom,rgba(255,255,255,.95),rgba(255,255,255,.1));transform-origin:top center;transform:rotate(var(--deg));z-index:3;pointer-events:none}
+.ray::after{content:attr(data-dir);position:absolute;left:7px;bottom:-8px;background:rgba(0,0,0,.66);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:2px 5px;font-size:11px;white-space:nowrap;color:#fff;}
+.tooltip{position:absolute;left:calc(var(--x) + 18px);top:calc(var(--y) + 18px);background:rgba(0,0,0,.68);padding:4px 8px;border-radius:8px;font-size:12px;font-weight:700;z-index:4;pointer-events:none}
+/*.panel{border-left:1px solid var(--line);background:linear-gradient(180deg,rgba(15,23,35,.98),rgba(4,8,14,.98));padding:18px;overflow:auto;max-height:100vh;}*/
+.panel{border-left:1px solid var(--line);background:linear-gradient(180deg,rgba(15,23,35,.98),rgba(4,8,14,.98));padding:18px;overflow:auto;}
+.panel {
+  position: sticky;
+  top: 0;
+
+  height: 100vh;
+  overflow: auto;
+
+  border-left: 1px solid var(--line);
+  background: linear-gradient(180deg,rgba(15,23,35,.98),rgba(4,8,14,.98));
+  padding: 18px;
+}
+.panel h2{margin:0 0 6px;font-size:22px} .panel .hint{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:14px}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px} button{border:1px solid var(--line);background:rgba(255,255,255,.08);color:var(--text);border-radius:10px;padding:9px 10px;font-weight:700;cursor:pointer} button:hover{background:rgba(255,255,255,.14)}
+.card{border:1px solid var(--line);border-radius:16px;background:rgba(255,255,255,.045);margin-bottom:12px;overflow:hidden} .card-head{display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.badge{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:white;font-weight:900;background:var(--c)} .coord{margin-left:auto;color:var(--muted);font-size:12px}
+.photos{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px} .photo{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#111;cursor:pointer;min-height:72px}
+.photo img{width:100%;height:78px;object-fit:cover;display:block} .photo span{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.7);padding:3px 6px;border-radius:6px;font-size:12px;font-weight:800}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:20;padding:26px} .modal.open{display:flex} .modal-inner{max-width:min(1100px,96vw);max-height:94vh;background:#070a0f;border:1px solid var(--line);border-radius:18px;overflow:hidden} .modal img{display:block;max-width:100%;max-height:78vh} .modal-title{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;font-weight:800} .close{padding:4px 10px}
+textarea{width:100%;height:120px;background:#05070a;color:#d7eaff;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+@media(max-width:980px){.app{grid-template-columns:1fr}.panel{max-height:none;border-left:0;border-top:1px solid var(--line)}.stage{width:100%;min-width:0}}
+
+.photo video {
+  width: 100%;
+  height: 78px;
+  object-fit: cover;
+  display: block;
+}
+
+.video-badge {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  background: rgba(0,0,0,.72);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 12px;
+  font-weight: 900;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="stage-wrap">
+    <div class="stage" id="stage">
+      <img class="base-map" id="baseMap" src="_지도위치.jpg" alt="현장 기준 지도">
+      <div class="header"><h1>현장 종합 지도</h1><p>A~E 마커는 원본 지도 위치 기준 · 사진명 괄호는 촬영 방향</p></div>
+      <div class="compass"><b>N</b><span>12시</span></div><div class="south">S · 6시</div>
+      <div id="overlay"></div>
+    </div>
+  </main>
+  <aside class="panel">
+    <h2>마커 / 사진 정보</h2>
+    <div class="hint">C, D, E 추가 이미지를 포함해 다시 구성했습니다. 마커는 원본 지도에 표시된 A~E 글자 위치를 기준으로 올렸습니다. 외부 이미지로 바꾸려면 siteData의 각 photo <b>file</b> 값을 URL로 교체하면 됩니다.</div>
+    <div class="tools"><button onclick="resetPositions()">좌표 초기화</button><button onclick="copyCoords()">좌표 복사</button></div>
+    <div id="cards"></div>
+    <textarea id="coordBox" readonly></textarea>
+  </aside>
+</div>
+<div class="modal" id="modal" onclick="closeModal(event)"><div class="modal-inner"><div class="modal-title"><span id="modalTitle"></span><button class="close" onclick="hideModal()">닫기</button></div><img id="modalImg" src=""></div></div>
+<script>
+let currentGallery = [];
+let currentIndex = 0;
+
+const siteData = [
+  {
+    "id": "A",
+    "title": "A 지점",
+    "x": 65.116,
+    "y": 46.377,
+    "color": "#ef4444",
+    "photos": [
+      {
+        "marker": "A",
+        "file": "A(4시).jpg",
+        "direction": "4시"
+      },
+      {
+        "marker": "A",
+        "file": "A(5시).jpg",
+        "direction": "5시"
+      },
+      {
+        "marker": "A",
+        "file": "A(7시).jpg",
+        "direction": "7시"
+      },
+      {
+        "marker": "A",
+        "file": "A(8시).jpg",
+        "direction": "8시"
+      },
+      {
+        "marker": "A",
+        "file": "A(9시).jpg",
+        "direction": "9시"
+      },
+      {
+        "marker": "A",
+        "file": "A(11시).jpg",
+        "direction": "11시"
+      },
+      {
+        "marker": "A",
+        "file": "A(반시계, 4시-10시).mp4",
+        "direction": "반시계(4-10)"
+      },
+      {
+        "marker": "A",
+        "file": "A(시계, 4시-9시).mp4",
+        "direction": "시계(4-9)"
+      }
+    ]
+  },
+  {
+    "id": "B",
+    "title": "B 지점",
+    "x": 69.806,
+    "y": 47.767,
+    "color": "#f97316",
+    "photos": [
+      {
+        "marker": "B",
+        "file": "B(5시).jpg",
+        "direction": "5시"
+      },
+      {
+        "marker": "B",
+        "file": "B(7시).jpg",
+        "direction": "7시"
+      },
+      {
+        "marker": "B",
+        "file": "B(9시).jpg",
+        "direction": "9시"
+      },
+      {
+        "marker": "B",
+        "file": "B(10시).jpg",
+        "direction": "10시"
+      },
+      {
+        "marker": "B",
+        "file": "B(반시계, 2시-4시).mp4",
+        "direction": "반시계(2-4)"
+      }
+    ]
+  },
+  {
+    "id": "C",
+    "title": "C 지점",
+    "x": 39.69,
+    "y": 37.444,
+    "color": "#22c55e",
+    "photos": [
+      {
+        "marker": "C",
+        "file": "C(12시).jpg",
+        "direction": "12시"
+      },
+      {
+        "marker": "C",
+        "file": "C주변(12시).jpg",
+        "direction": "12시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C(1시).jpg",
+        "direction": "1시"
+      },
+      {
+        "marker": "C",
+        "file": "C주변(1시).jpg",
+        "direction": "1시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C(2시).jpg",
+        "direction": "2시"
+      },
+      {
+        "marker": "C",
+        "file": "C(2시)_2.jpg",
+        "direction": "2시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C(3시).jpg",
+        "direction": "3시"
+      },
+      {
+        "marker": "C",
+        "file": "C주변(3시).jpg",
+        "direction": "3시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C(4시).jpg",
+        "direction": "4시"
+      },
+      {
+        "marker": "C",
+        "file": "C(5시).jpg",
+        "direction": "5시"
+      },
+      {
+        "marker": "C",
+        "file": "C(6시).jpg",
+        "direction": "6시"
+      },
+      {
+        "marker": "C",
+        "file": "C(6시)_2.jpg",
+        "direction": "6시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C(7시).jpg",
+        "direction": "7시"
+      },
+      {
+        "marker": "C",
+        "file": "C(7시)_2.jpg",
+        "direction": "7시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C주변(10시).jpg",
+        "direction": "10시"
+      },
+      {
+        "marker": "C",
+        "file": "C(11시).jpg",
+        "direction": "11시"
+      },
+      {
+        "marker": "C",
+        "file": "C주변(11시).jpg",
+        "direction": "11시_2"
+      },
+      {
+        "marker": "C",
+        "file": "C(반시계, 4시-5시).mp4",
+        "direction": "반시계(4-5)"
+      },
+      {
+        "marker": "C",
+        "file": "C(시계, 4시-9시).mp4",
+        "direction": "시계(4-9)"
+      }
+    ]
+  },
+  {
+    "id": "D",
+    "title": "D 지점",
+    "x": 54.806,
+    "y": 30.645,
+    "color": "#3b82f6",
+    "photos": [
+      {
+        "marker": "D",
+        "file": "D주변(6시).jpg",
+        "direction": "6시"
+      },
+      {
+        "marker": "D",
+        "file": "D주변(7시).jpg",
+        "direction": "7시"
+      },
+      {
+        "marker": "D",
+        "file": "D주변(8시).jpg",
+        "direction": "8시"
+      },
+      {
+        "marker": "D",
+        "file": "D(시계, 5시-9시).mp4",
+        "direction": "시계(5-9)"
+      }
+    ]
+  },
+  {
+    "id": "E",
+    "title": "E 지점",
+    "x": 63.992,
+    "y": 97.742,
+    "color": "#a855f7",
+    "photos": [
+      {
+        "marker": "E",
+        "file": "E주변(12시).jpg",
+        "direction": "12시"
+      },
+      {
+        "marker": "E",
+        "file": "E주변(12시)_2.jpg",
+        "direction": "12시_2"
+      },
+      {
+        "marker": "E",
+        "file": "E(11시).jpg",
+        "direction": "11시"
+      },
+      {
+        "marker": "E",
+        "file": "E(11시)_2.jpg",
+        "direction": "11시_2"
+      },
+      {
+        "marker": "E",
+        "file": "E(11시)_3.jpg",
+        "direction": "11시_3"
+      }
+    ]
+  }
+];
+const clockDeg = {"12시":0,"1시":30,"2시":60,"3시":90,"4시":120,"5시":150,"6시":180,"7시":210,"8시":240,"9시":270,"10시":300,"11시":330};
+const saved = JSON.parse(localStorage.getItem('fieldMapMarkerPositionsV2') || '{}');
+const overlay = document.getElementById('overlay');
+const cards = document.getElementById('cards');
+let selected = null;
+function posOf(s){ return saved[s.id] || {x:s.x,y:s.y}; }
+function render(){ overlay.innerHTML=''; cards.innerHTML=''; siteData.forEach(s=>{ const p=posOf(s); const dirs=[...new Set(s.photos.map(ph=>ph.direction).filter(Boolean))]; dirs.forEach(dir=>{ if(clockDeg[dir] === undefined) return; const r=document.createElement('div'); r.className='ray'; r.dataset.dir=dir; r.style.setProperty('--x',p.x+'%'); r.style.setProperty('--y',p.y+'%'); r.style.setProperty('--deg',(clockDeg[dir]||0)+'deg'); r.style.setProperty('--len',(48+Math.min(50,dirs.length*5))+'px'); overlay.appendChild(r); }); const tip=document.createElement('div'); tip.className='tooltip'; tip.textContent=s.title; tip.style.setProperty('--x',p.x+'%'); tip.style.setProperty('--y',p.y+'%'); overlay.appendChild(tip); const m=document.createElement('div'); m.className='marker'; m.textContent=s.id; m.dataset.id=s.id; m.style.setProperty('--x',p.x+'%'); m.style.setProperty('--y',p.y+'%'); m.style.setProperty('--c',s.color); m.onclick=()=>selectMarker(s.id); enableDrag(m,s); overlay.appendChild(m); cards.insertAdjacentHTML('beforeend', cardHtml(s,p)); }); updateCoordBox(); }
+//function cardHtml(s,p){ return `<div class="card" style="--c:${s.color}"><div class="card-head"><div class="badge">${s.id}</div><b>${s.title}</b><span class="coord">x:${p.x.toFixed(3)}% y:${p.y.toFixed(3)}%</span></div><div class="photos">${s.photos.map(ph=>`<div class="photo" onclick="showPhoto('${ph.file}','${s.id} · ${ph.direction || '방향미상'} · ${ph.file}')"><img src="${ph.file}" loading="lazy"><span>${ph.direction || '방향미상'}</span></div>`).join('')}</div></div>`; }
+function cardHtml(s,p){
+  return `
+  <div class="card" style="--c:${s.color}">
+    <div class="card-head">
+      <div class="badge">${s.id}</div>
+      <b>${s.title}</b>
+      <span class="coord">x:${p.x.toFixed(3)}% y:${p.y.toFixed(3)}%</span>
+    </div>
+    <div class="photos">
+      ${s.photos.map((ph, idx)=>{
+        const isVideo = ph.file.toLowerCase().endsWith('.mp4');
+
+        return `
+        <div class="photo" onclick="openGallery('${s.id}', ${idx})">
+          ${
+            isVideo
+            ? `
+              <video
+                src="${ph.file}"
+                muted
+                preload="metadata"
+                playsinline
+              ></video>
+              <div class="video-badge">▶</div>
+            `
+            : `<img src="${ph.file}" loading="lazy">`
+          }
+          <span>${ph.direction || '방향미상'}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+function selectMarker(id){selected=id; document.querySelectorAll('.marker').forEach(el=>el.classList.toggle('selected',el.dataset.id===id));}
+function enableDrag(el,s){ let down=false; el.addEventListener('pointerdown',e=>{down=true; el.setPointerCapture(e.pointerId); selectMarker(s.id);}); el.addEventListener('pointermove',e=>{ if(!down)return; const rect=document.getElementById('stage').getBoundingClientRect(); const x=(e.clientX-rect.left)/rect.width*100; const y=(e.clientY-rect.top)/rect.height*100; saved[s.id]={x:Math.max(0,Math.min(100,x)), y:Math.max(0,Math.min(100,y))}; localStorage.setItem('fieldMapMarkerPositionsV2',JSON.stringify(saved)); render(); }); el.addEventListener('pointerup',()=>down=false); }
+function updateCoordBox(){ const out={}; siteData.forEach(s=>out[s.id]=posOf(s)); document.getElementById('coordBox').value=JSON.stringify(out,null,2); }
+function resetPositions(){ localStorage.removeItem('fieldMapMarkerPositionsV2'); location.reload(); }
+async function copyCoords(){ updateCoordBox(); await navigator.clipboard.writeText(document.getElementById('coordBox').value); }
+function showPhoto(src,title){ document.getElementById('modalImg').src=src; document.getElementById('modalTitle').textContent=title; document.getElementById('modal').classList.add('open'); }
+function hideModal(){ document.getElementById('modal').classList.remove('open'); }
+function closeModal(e){ if(e.target.id==='modal') hideModal(); }
+render();
+
+function openGallery(markerId, index){
+  const site = siteData.find(x => x.id === markerId);
+  if(!site) return;
+
+  currentGallery = site.photos;
+  currentIndex = index;
+
+  renderGalleryItem(site.id);
+}
+
+function renderGalleryItem(markerId){
+  const item = currentGallery[currentIndex];
+  const modal = document.getElementById('modal');
+  const container = document.querySelector('.modal-inner');
+  const isVideo = item.file.toLowerCase().endsWith('.mp4');
+
+  container.innerHTML = `
+    <div class="modal-title">
+      <button class="close" onclick="prevMedia(event)">이전</button>
+      <span id="modalTitle">
+        ${markerId} · ${item.direction || '방향미상'} · ${item.file}
+        (${currentIndex + 1}/${currentGallery.length})
+      </span>
+      <button class="close" onclick="nextMedia(event)">다음</button>
+      <button class="close" onclick="hideModal()">닫기</button>
+    </div>
+  `;
+
+  if(isVideo){
+    container.insertAdjacentHTML('beforeend', `
+      <video controls autoplay style="display:block;max-width:100%;max-height:78vh">
+        <source src="${item.file}" type="video/mp4">
+      </video>
+    `);
+  } else {
+    container.insertAdjacentHTML('beforeend', `
+      <img src="${item.file}" style="display:block;max-width:100%;max-height:78vh">
+    `);
+  }
+
+  modal.classList.add('open');
+}
+
+function prevMedia(e){
+  e.stopPropagation();
+  currentIndex = (currentIndex - 1 + currentGallery.length) % currentGallery.length;
+  const markerId = document.getElementById('modalTitle').textContent.trim().split(' · ')[0];
+  renderGalleryItem(markerId);
+}
+
+function nextMedia(e){
+  e.stopPropagation();
+  currentIndex = (currentIndex + 1) % currentGallery.length;
+  const markerId = document.getElementById('modalTitle').textContent.trim().split(' · ')[0];
+  renderGalleryItem(markerId);
+}
+
+document.addEventListener('keydown', function(e){
+  if(!document.getElementById('modal').classList.contains('open')) return;
+
+  if(e.key === 'ArrowLeft') prevMedia(e);
+  if(e.key === 'ArrowRight') nextMedia(e);
+  if(e.key === 'Escape') hideModal();
+});
+</script>
+</body>
+</html>
